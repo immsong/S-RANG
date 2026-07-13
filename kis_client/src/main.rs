@@ -1,4 +1,4 @@
-mod auth; // auth.rs 모듈을 불러옵니다.
+mod auth;
 
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Client;
@@ -68,13 +68,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Message::Text(text)) => {
                 // 수신된 날것(Raw)의 데이터를 콘솔에 출력
                 println!("Received data: {}", text);
+
+                // 불필요 문자열 건너뛰기
+                if text.contains("PINGPONG") || text.contains("SUBSCRIBE") {
+                    continue;
+                }
+
+                let parts: Vec<&str> = text.split('|').collect();
+
+                // 정상적인 호가창 데이터(H0STASP0)인지 검증
+                if parts.len() >= 4 && parts[1] == "H0STASP0" {
+                    let data_body = parts[3];
+                    let fields: Vec<&str> = data_body.split('^').collect();
+
+                    // 10호가 데이터를 모두 포함하려면 최소 45개 이상의 필드가 있어야 함
+                    if fields.len() >= 45 {
+                        let time = fields[1];
+
+                        // 10호가 데이터를 담을 배열 초기화
+                        let mut ask_prices = [0u32; 10];
+                        let mut bid_prices = [0u32; 10];
+                        let mut ask_vols = [0u32; 10];
+                        let mut bid_vols = [0u32; 10];
+
+                        // 반복문을 통해 1~10호가 데이터를 배열에 삽입
+                        for i in 0..10 {
+                            ask_prices[i] = fields[3 + i].parse().unwrap_or(0);
+                            bid_prices[i] = fields[13 + i].parse().unwrap_or(0);
+                            ask_vols[i] = fields[23 + i].parse().unwrap_or(0);
+                            bid_vols[i] = fields[33 + i].parse().unwrap_or(0);
+                        }
+
+                        // 총 잔량 추출
+                        let total_ask_vol: u32 = fields[43].parse().unwrap_or(0);
+                        let total_bid_vol: u32 = fields[44].parse().unwrap_or(0);
+
+                        println!(
+                            "[Tick: {}] Total Ask Qty: {} | Total Bid Qty: {}",
+                            time, total_ask_vol, total_bid_vol
+                        );
+                        println!("  -> Ask Prices 1-10: {:?}", ask_prices);
+                        println!("  -> Ask Quantities 1-10: {:?}", ask_vols);
+                        println!("  -> Bid Prices 1-10: {:?}", bid_prices);
+                        println!("  -> Bid Quantities 1-10: {:?}", bid_vols);
+                        println!("--------------------------------------------------");
+                    }
+                } else {
+                    println!("Not Order Book Data: {}", text);
+                }
             }
             Ok(Message::Ping(ping)) => {
                 // 서버에서 연결 유지를 위해 Ping을 보내면 Pong으로 응답
                 write.send(Message::Pong(ping)).await?;
             }
             Err(e) => {
-                println!("WebSocket receive error: {}", e);
+                println!("WebSocket Error: {}", e);
                 break;
             }
             _ => {}
