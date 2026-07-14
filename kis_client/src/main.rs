@@ -18,10 +18,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("KIS Client is starting...");
 
     // REST API용 토큰 발급 (나중에 계좌 조회 등 다른 목적을 위해 대비)
-    let _access_token = auth::get_access_token(&client, &app_key, &app_secret).await?;
+    let tokens = auth::get_auth_tokens(&client, &app_key, &app_secret).await?;
 
     // 웹소켓 전용 승인키 발급
-    let approval_key = auth::get_approval_key(&client, &app_key, &app_secret).await?;
+    let approval_key = &tokens.approval_key;
 
     println!("All authentication keys are ready.");
     // 보안상 터미널에 키 값을 직접 출력하지는 않습니다.
